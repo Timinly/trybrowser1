@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser - Telegram Mini App</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .browser-header {
+            background: var(--tg-theme-secondary-bg-color, #f1f1f1);
+            border-bottom: 1px solid var(--tg-theme-hint-color, #ccc);
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 5px;
+        }
+
+        .nav-btn {
+            background: var(--tg-theme-button-color, #0088ff);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border: none;
+            border-radius: 6px;
+            width: 40px;
+            height: 32px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.2s;
+        }
+
+        .nav-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .nav-btn:hover:not(:disabled) {
+            opacity: 0.8;
+        }
+
+        .url-bar {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid var(--tg-theme-hint-color, #ccc);
+            border-radius: 20px;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            font-size: 14px;
+            outline: none;
+        }
+
+        .url-bar:focus {
+            border-color: var(--tg-theme-button-color, #0088ff);
+        }
+
+        .go-btn {
+            background: var(--tg-theme-button-color, #0088ff);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: opacity 0.2s;
+        }
+
+        .go-btn:hover {
+            opacity: 0.8;
+        }
+
+        .browser-content {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .browser-frame {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: white;
+        }
+
+        .loading {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--tg-theme-button-color, #0088ff);
+            transform: translateX(-100%);
+            animation: loading 2s infinite;
+            z-index: 10;
+        }
+
+        @keyframes loading {
+            0% { transform: translateX(-100%); }
+            50% { transform: translateX(0%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .quick-links {
+            display: flex;
+            gap: 10px;
+            padding: 10px;
+            background: var(--tg-theme-secondary-bg-color, #f8f8f8);
+            border-bottom: 1px solid var(--tg-theme-hint-color, #eee);
+            overflow-x: auto;
+            flex-shrink: 0;
+        }
+
+        .quick-link {
+            background: var(--tg-theme-bg-color, #ffffff);
+            border: 1px solid var(--tg-theme-hint-color, #ddd);
+            border-radius: 15px;
+            padding: 5px 12px;
+            font-size: 12px;
+            color: var(--tg-theme-text-color, #000000);
+            text-decoration: none;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .quick-link:hover {
+            background: var(--tg-theme-hint-color, #f0f0f0);
+        }
+
+        .error-page {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .error-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .error-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .error-message {
+            color: var(--tg-theme-hint-color, #666);
+            margin-bottom: 20px;
+        }
+
+        .retry-btn {
+            background: var(--tg-theme-button-color, #0088ff);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border: none;
+            border-radius: 6px;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="browser-header">
+        <div class="nav-buttons">
+            <button class="nav-btn" id="backBtn" title="Назад">←</button>
+            <button class="nav-btn" id="forwardBtn" title="Вперед">→</button>
+            <button class="nav-btn" id="refreshBtn" title="Обновить">↻</button>
+        </div>
+        <input type="text" class="url-bar" id="urlBar" placeholder="Введите URL или поисковый запрос...">
+        <button class="go-btn" id="goBtn">Перейти</button>
+    </div>
+
+    <div class="quick-links">
+        <a href="#" class="quick-link" data-url="https://www.google.com">Google</a>
+        <a href="#" class="quick-link" data-url="https://www.yandex.ru">Yandex</a>
+        <a href="#" class="quick-link" data-url="https://www.youtube.com">YouTube</a>
+        <a href="#" class="quick-link" data-url="https://github.com">GitHub</a>
+        <a href="#" class="quick-link" data-url="https://stackoverflow.com">Stack Overflow</a>
+        <a href="#" class="quick-link" data-url="https://translate.google.com">Переводчик</a>
+    </div>
+
+    <div class="browser-content">
+        <div class="loading" id="loading" style="display: none;"></div>
+        <iframe class="browser-frame" id="browserFrame" src="about:blank"></iframe>
+        
+        <div class="error-page" id="errorPage">
+            <div class="error-icon">⚠️</div>
+            <div class="error-title">Не удалось загрузить страницу</div>
+            <div class="error-message">Проверьте URL или попробуйте позже</div>
+            <button class="retry-btn" id="retryBtn">Попробовать снова</button>
+        </div>
+    </div>
+
+    <script>
+        // Инициализация Telegram Web App
+        let tg = window.Telegram?.WebApp;
+        if (tg) {
+            tg.ready();
+            tg.expand();
+        }
+
+        // Элементы DOM
+        const urlBar = document.getElementById('urlBar');
+        const goBtn = document.getElementById('goBtn');
+        const backBtn = document.getElementById('backBtn');
+        const forwardBtn = document.getElementById('forwardBtn');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const browserFrame = document.getElementById('browserFrame');
+        const loading = document.getElementById('loading');
+        const errorPage = document.getElementById('errorPage');
+        const retryBtn = document.getElementById('retryBtn');
+        const quickLinks = document.querySelectorAll('.quick-link');
+
+        // История навигации
+        let history = [];
+        let currentIndex = -1;
+        let currentUrl = '';
+
+        // Функция для отображения загрузки
+        function showLoading() {
+            loading.style.display = 'block';
+            errorPage.style.display = 'none';
+            browserFrame.style.display = 'block';
+        }
+
+        // Функция для скрытия загрузки
+        function hideLoading() {
+            loading.style.display = 'none';
+        }
+
+        // Функция для показа ошибки
+        function showError() {
+            hideLoading();
+            errorPage.style.display = 'flex';
+            browserFrame.style.display = 'none';
+        }
+
+        // Функция для нормализации URL
+        function normalizeUrl(input) {
+            if (!input) return '';
+            
+            input = input.trim();
+            
+            // Если это уже полный URL
+            if (input.startsWith('http://') || input.startsWith('https://')) {
+                return input;
+            }
+            
+            // Если это домен
+            if (input.includes('.') && !input.includes(' ')) {
+                return 'https://' + input;
+            }
+            
+            // Иначе это поисковый запрос
+            return 'https://www.google.com/search?q=' + encodeURIComponent(input);
+        }
+
+        // Функция загрузки URL
+        function loadUrl(url) {
+            if (!url) return;
+            
+            const normalizedUrl = normalizeUrl(url);
+            
+            showLoading();
+            urlBar.value = normalizedUrl;
+            currentUrl = normalizedUrl;
+            
+            // Обновляем историю
+            if (currentIndex < history.length - 1) {
+                history = history.slice(0, currentIndex + 1);
+            }
+            history.push(normalizedUrl);
+            currentIndex = history.length - 1;
+            
+            updateNavigationButtons();
+            
+            try {
+                browserFrame.src = normalizedUrl;
+                
+                // Таймаут для обработки ошибок загрузки
+                setTimeout(() => {
+                    hideLoading();
+                }, 5000);
+                
+            } catch (error) {
+                showError();
+            }
+        }
+
+        // Обновление кнопок навигации
+        function updateNavigationButtons() {
+            backBtn.disabled = currentIndex <= 0;
+            forwardBtn.disabled = currentIndex >= history.length - 1;
+        }
+
+        // Обработчики событий
+        goBtn.addEventListener('click', () => {
+            loadUrl(urlBar.value);
+        });
+
+        urlBar.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                loadUrl(urlBar.value);
+            }
+        });
+
+        backBtn.addEventListener('click', () => {
+            if (currentIndex > 0) {
+                currentIndex--;
+                const url = history[currentIndex];
+                showLoading();
+                browserFrame.src = url;
+                urlBar.value = url;
+                updateNavigationButtons();
+            }
+        });
+
+        forwardBtn.addEventListener('click', () => {
+            if (currentIndex < history.length - 1) {
+                currentIndex++;
+                const url = history[currentIndex];
+                showLoading();
+                browserFrame.src = url;
+                urlBar.value = url;
+                updateNavigationButtons();
+            }
+        });
+
+        refreshBtn.addEventListener('click', () => {
+            if (currentUrl) {
+                showLoading();
+                browserFrame.src = currentUrl;
+            }
+        });
+
+        retryBtn.addEventListener('click', () => {
+            if (currentUrl) {
+                loadUrl(currentUrl);
+            }
+        });
+
+        // Быстрые ссылки
+        quickLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const url = link.getAttribute('data-url');
+                loadUrl(url);
+            });
+        });
+
+        // Обработка загрузки iframe
+        browserFrame.addEventListener('load', () => {
+            hideLoading();
+            try {
+                // Попытка получить URL из iframe (может не работать из-за CORS)
+                const frameUrl = browserFrame.contentWindow?.location?.href;
+                if (frameUrl && frameUrl !== 'about:blank') {
+                    urlBar.value = frameUrl;
+                    currentUrl = frameUrl;
+                }
+            } catch (error) {
+                // Игнорируем ошибки CORS
+            }
+        });
+
+        browserFrame.addEventListener('error', () => {
+            showError();
+        });
+
+        // Инициализация
+        updateNavigationButtons();
+        
+        // Загружаем Google по умолчанию
+        setTimeout(() => {
+            loadUrl('https://www.google.com');
+        }, 100);
+
+        // Настройка темы Telegram
+        if (tg) {
+            document.documentElement.style.setProperty('--tg-theme-bg-color', tg.themeParams.bg_color || '#ffffff');
+            document.documentElement.style.setProperty('--tg-theme-text-color', tg.themeParams.text_color || '#000000');
+            document.documentElement.style.setProperty('--tg-theme-hint-color', tg.themeParams.hint_color || '#999999');
+            document.documentElement.style.setProperty('--tg-theme-button-color', tg.themeParams.button_color || '#0088ff');
+            document.documentElement.style.setProperty('--tg-theme-button-text-color', tg.themeParams.button_text_color || '#ffffff');
+            document.documentElement.style.setProperty('--tg-theme-secondary-bg-color', tg.themeParams.secondary_bg_color || '#f1f1f1');
+        }
+    </script>
+</body>
+</html>
